@@ -18,19 +18,25 @@ def slugify(text):
     return "".join(c for c in text if c.isalnum() or c in "_-").strip("_")
 
 
-def login(session, base_url, username, password):
+def login(session, course_url, username, password):
+    parsed = urlparse(course_url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
     login_url = urljoin(base_url, "/login/index.php")
+
+    print("Login URL:", login_url)
 
     r = session.get(login_url)
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
-    token = soup.find("input", {"name": "logintoken"})["value"]
+    token_input = soup.find("input", {"name": "logintoken"})
+    if not token_input:
+        raise RuntimeError("Could not find logintoken on login page")
 
     payload = {
         "username": username,
         "password": password,
-        "logintoken": token,
+        "logintoken": token_input["value"],
     }
 
     r = session.post(login_url, data=payload)
@@ -75,9 +81,8 @@ def main():
 
     session = requests.Session()
 
-    parsed = urlparse(args.course_url)
-    base_url = f"{parsed.scheme}://{parsed.netloc}"
-    login(session, base_url, args.username, args.password)
+ 
+    login(session, args.course_url, args.username, args.password)
 
     course_html = session.get(args.course_url).text
     sections = extract_sections(course_html, args.course_url)
