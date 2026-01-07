@@ -95,7 +95,16 @@ def extract_sections(course_html, course_url):
 
 
 def extract_media_ids(page_html):
-    return MEDIA_RE.findall(page_html)
+    soup = BeautifulSoup(page_html, "html.parser")
+    media_ids = set()
+
+    for iframe in soup.select("iframe[src]"):
+        src = iframe["src"]
+        m = MEDIA_RE.search(src)
+        if m:
+            media_ids.add(m.group(1))
+
+    return media_ids
 
 
 def main():
@@ -130,21 +139,43 @@ def main():
                 print("DEBUG — no zoodle link found in raw HTML")
                 continue
 
-            media_ids = extract_media_ids(page_html)
-            print("DEBUG — media IDs found:", media_ids)
+            print(f"DEBUG — fetching page: {page_url}")
 
-            for media_id in media_ids:
-                mp4_url = (
-                    f"https://zoodle.macam.ac.il/jercol/files/{media_id}.mp4"
-                )
+            r = session.get(page_url)
+            r.raise_for_status()
+            page_html = r.text
 
-                filename = (
-                    f"{section_slug}_{video_counter:02d}.mp4"
-                )
-                video_counter += 1
+            soup = BeautifulSoup(page_html, "html.parser")
 
-                print(f"  - {filename}")
-                print(f"    {mp4_url}")
+            print("DEBUG — iframes found:")
+            for iframe in soup.find_all("iframe"):
+                print("   iframe src:", iframe.get("src"))
+
+            print("DEBUG — elements with data-src:")
+            for tag in soup.select("[data-src]"):
+                print("   data-src:", tag.get("data-src"))
+
+            print("DEBUG — elements with data-video:")
+            for tag in soup.select("[data-video]"):
+                print("   data-video:", tag.get("data-video"))
+
+            print()  # blank line for readability
+
+            # media_ids = extract_media_ids(page_html)
+            # print("DEBUG — media IDs found:", media_ids)
+
+            # for media_id in media_ids:
+            #     mp4_url = (
+            #         f"https://zoodle.macam.ac.il/jercol/files/{media_id}.mp4"
+            #     )
+
+            #     filename = (
+            #         f"{section_slug}_{video_counter:02d}.mp4"
+            #     )
+            #     video_counter += 1
+
+            #     print(f"  - {filename}")
+            #     print(f"    {mp4_url}")
 
 
 if __name__ == "__main__":
