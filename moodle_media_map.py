@@ -18,32 +18,38 @@ def slugify(text):
     return "".join(c for c in text if c.isalnum() or c in "_-").strip("_")
 
 
-def login(session, course_url, username, password):
-    parsed = urlparse(course_url)
-    base_url = f"{parsed.scheme}://{parsed.netloc}"
-    login_url = urljoin(base_url, "/login/index.php")
+def login(session, username, password):
+    login_url = "https://moodle4.michlala.edu/login/index.php"
 
-    print("Login URL:", login_url)
-
+    # Step 1: GET login page
     r = session.get(login_url)
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
+
     token_input = soup.find("input", {"name": "logintoken"})
     if not token_input:
-        raise RuntimeError("Could not find logintoken on login page")
+        raise RuntimeError("Could not find logintoken — login page structure unexpected")
+
+    token = token_input["value"]
 
     payload = {
         "username": username,
         "password": password,
-        "logintoken": token_input["value"],
+        "logintoken": token,
     }
 
-    r = session.post(login_url, data=payload)
+    # Step 2: POST credentials
+    r = session.post(login_url, data=payload, allow_redirects=True)
     r.raise_for_status()
 
+    # Step 3: verify login success
     if "loginerrors" in r.text.lower():
-        raise RuntimeError("Login failed")
+        raise RuntimeError("Login failed: invalid credentials")
+
+    # Moodle usually redirects to /my/ or the originally requested page
+    print("Logged in, final URL:", r.url)
+
 
 
 def extract_sections(course_html, course_url):
@@ -81,8 +87,9 @@ def main():
 
     session = requests.Session()
 
- 
-    login(session, args.course_url, args.username, args.password)
+    print(args.username, args.password)
+
+    login(session, args.username, args.password)
 
     course_html = session.get(args.course_url).text
     sections = extract_sections(course_html, args.course_url)
