@@ -51,18 +51,38 @@ def login(session, username, password):
     print("Logged in, final URL:", r.url)
 
 
+def extract_section_name(section):
+    # 1. Best case: data attribute
+    name = section.get("data-sectionname")
+    if name:
+        return name.strip()
+
+    # 2. Visible section name (remove "הקליקו" etc.)
+    header = section.select_one(".sectionname")
+    if header:
+        text = header.get_text(" ", strip=True)
+        # remove common UI suffixes
+        for suffix in ["הקליקו", "click", "לחצו"]:
+            text = text.replace(suffix, "").strip(" -–")
+        return text
+
+    # 3. Fallback
+    secnum = section.get("data-sectionid", "unknown")
+    return f"section_{secnum}"
+
+
 
 def extract_sections(course_html, course_url):
     soup = BeautifulSoup(course_html, "html.parser")
     sections = []
 
     for section in soup.select("li.section"):
-        header = section.select_one(".sectionname")
-        if not header:
-            continue
-
-        section_name = header.get_text(strip=True)
+        section_name = extract_section_name(section)
         section_slug = slugify(section_name)
+
+        print(f"\nDEBUG — section: {section_slug}")
+        for a in section.select("a[href]"):
+            print("   ", a["href"])
 
         page_links = [
             urljoin(course_url, a["href"])
@@ -100,8 +120,18 @@ def main():
         video_counter = 1
 
         for page_url in page_links:
-            page_html = session.get(page_url).text
+            print("DEBUG — fetching page:", page_url)
+            r = session.get(page_url)
+            print("DEBUG — final URL:", r.url)
+
+            page_html = r.text
+
+            if "zoodle.macam.ac.il" not in page_html:
+                print("DEBUG — no zoodle link found in raw HTML")
+                continue
+
             media_ids = extract_media_ids(page_html)
+            print("DEBUG — media IDs found:", media_ids)
 
             for media_id in media_ids:
                 mp4_url = (
